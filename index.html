@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f7f2e4">
+<meta name="format-detection" content="telephone=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="费曼空间">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>费曼空间</title>
+<!--
+  费曼空间 · 单文件应用
+  用法：双击本文件用浏览器打开即可，也可以放到手机上用（浏览器打开或托管上网址）。
+
+  安全：本文件不含任何 API Key。首次使用请在应用内 ⚙️ 设置中填写，
+  Key 只保存在你自己浏览器的 localStorage 里——文件可以放心托管/分享。
+-->
+<style>
+/* ================= 主题变量 ================= */
+:root{
+  --bg:#f7f2e4;
+  --bg-grad:radial-gradient(1200px 600px at 50% -10%, #fff8e2 0%, #f7f2e4 60%);
+  --panel:#fffdf5;
+  --ink:#463a25;
+  --sub:#a08e68;
+  --accent:#e8b83a;
+  --bubble:#ffffff;
+  --user-bubble:#f0d060;
+  --user-ink:#4a3a10;
+  --line:#e6dcc2;
+  --shadow:0 1px 3px rgba(120,96,40,.10);
+}
+body.battle{
+  --bg:#131418;
+  --bg-grad:radial-gradient(1200px 600px at 50% -10%, #24161a 0%, #131418 60%);
+  --panel:#1c1e24;
+  --ink:#e9e6df;
+  --sub:#8b8e97;
+  --accent:#e5484d;
+  --bubble:#24272f;
+  --user-bubble:#3b2a2d;
+  --user-ink:#f2dcdd;
+  --line:#2e313a;
+  --shadow:0 1px 3px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;-webkit-text-size-adjust:100%}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+  background:var(--bg);
+  background-image:var(--bg-grad);
+  color:var(--ink);
+  display:flex;flex-direction:column;overflow:hidden;
+  /* 100vh 在 iPhone 上按地址栏收起算，会顶掉输入框；dvh 更准，再有 JS 跟随键盘高度兜底 */
+  height:100vh;height:100dvh;
+  overscroll-behavior-y:none;
+  transition:background-color .9s ease,color .9s ease;
+}
+button{
+  font-family:inherit;font-size:13px;cursor:pointer;
+  -webkit-appearance:none;touch-action:manipulation;
+  border:1px solid var(--line);background:var(--panel);color:var(--ink);
+  border-radius:8px;padding:6px 12px;
+  transition:background .2s,border-color .2s,color .2s;
+}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:#fff;border-color:transparent;font-weight:600}
+button.primary:hover{filter:brightness(1.08)}
+.hidden{display:none !important}
+
+/* ================= 顶栏 ================= */
+header{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:calc(10px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 10px calc(16px + env(safe-area-inset-left));
+  border-bottom:1px solid var(--line);
+  background:var(--panel);box-shadow:var(--shadow);
+  transition:background .9s,border-color .9s;
+  z-index:5;
+}
+.brand{font-weight:800;letter-spacing:1px;white-space:nowrap;font-size:15px}
+.brand .brandzoo{font-size:18px}
+#phaseWarm,#phaseBattle{display:flex;align-items:center;gap:10px;flex:1;min-width:200px}
+#phaseWarm label{color:var(--sub);font-size:14px;white-space:nowrap}
+#topicInput{
+  flex:1;max-width:420px;font-size:14px;font-family:inherit;color:var(--ink);
+  background:transparent;border:1px dashed var(--line);border-radius:8px;
+  padding:6px 10px;outline:none;
+}
+#topicInput:focus{border-color:var(--accent)}
+#topicInput::placeholder{color:var(--sub);opacity:.7}
+#phaseBattle .opp-label{color:var(--sub);font-size:14px}
+#oppName{font-size:15px;color:var(--accent)}
+.badge{
+  font-size:12px;font-weight:700;color:#fff;background:var(--accent);
+  padding:2px 8px;border-radius:999px;
+}
+.scorebox{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub)}
+#scoreDots{letter-spacing:2px;color:var(--accent);font-size:14px}
+.actions{display:flex;gap:8px;margin-left:auto}
+
+/* ================= 对话区 ================= */
+#chat{
+  flex:1;overflow-y:auto;
+  padding:22px calc(16px + env(safe-area-inset-right)) 12px calc(16px + env(safe-area-inset-left));
+  display:flex;flex-direction:column;gap:14px;
+  scroll-behavior:smooth;overscroll-behavior:contain;
+}
+.msg{display:flex;gap:9px;align-items:flex-end;max-width:100%}
+.msg.user{justify-content:flex-end;padding-left:15%}
+.msg.duck{padding-right:15%}
+.avatar{
+  width:36px;height:36px;flex:none;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;background:var(--panel);border:1px solid var(--line);
+  transition:filter .6s,border-color .6s,box-shadow .6s;
+}
+body:not(.battle) .avatar{filter:grayscale(1) opacity(.75)}
+body.battle .avatar{border-color:var(--accent);box-shadow:0 0 10px rgba(229,72,77,.35)}
+.bubble{
+  max-width:min(80%,620px);
+  padding:10px 14px;border-radius:14px;
+  background:var(--bubble);box-shadow:var(--shadow);
+  line-height:1.65;font-size:14.5px;
+  white-space:pre-wrap;word-break:break-word;
+  border-top-left-radius:4px;
+}
+.msg.user .bubble{
+  background:var(--user-bubble);color:var(--user-ink);
+  border-top-left-radius:14px;border-top-right-radius:4px;
+}
+.center-banner{
+  align-self:center;max-width:92%;text-align:center;
+  padding:7px 18px;border-radius:999px;font-size:13px;color:var(--sub);
+  border:1px dashed var(--line);
+}
+.center-banner.awaken{
+  color:#fff;border:none;font-weight:700;
+  background:linear-gradient(90deg,#5d1518,#e5484d 50%,#5d1518);
+  animation:popIn .45s cubic-bezier(.2,1.5,.4,1);
+}
+.center-banner.levelup{
+  color:#5c3d00;border:none;font-weight:700;
+  background:linear-gradient(90deg,#ffe9ad,#ffd76e 50%,#ffe9ad);
+  animation:popIn .45s cubic-bezier(.2,1.5,.4,1);
+}
+@keyframes popIn{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* 打字指示 */
+.typing .bubble{display:flex;align-items:center;gap:6px;color:var(--sub);font-size:13px}
+.dots{display:inline-flex;gap:2px}
+.dots i{
+  width:4px;height:4px;border-radius:50%;background:var(--sub);
+  animation:blink 1.2s infinite;
+}
+.dots i:nth-child(2){animation-delay:.2s}
+.dots i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+
+/* ================= 输入区 ================= */
+footer{
+  display:flex;gap:10px;align-items:flex-end;
+  padding:12px calc(16px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  border-top:1px solid var(--line);
+  background:var(--panel);transition:background .9s,border-color .9s;
+}
+#input{
+  flex:1;font-family:inherit;font-size:14.5px;line-height:1.5;
+  color:var(--ink);background:var(--bg);border:1px solid var(--line);
+  border-radius:12px;padding:10px 13px;resize:none;outline:none;height:64px;
+  transition:border-color .2s;
+}
+#input:focus{border-color:var(--accent)}
+#input::placeholder{color:var(--sub);opacity:.65}
+#send{height:40px;padding:0 22px;font-size:14px;flex:none}
+
+/* ================= 觉醒特效 ================= */
+#fx{
+  position:fixed;inset:0;z-index:60;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(10,7,5,.93);backdrop-filter:blur(3px);
+}
+.fx-inner{text-align:center}
+.bigduck{font-size:120px;line-height:1;animation:duckIn .5s cubic-bezier(.2,1.6,.4,1)}
+@keyframes duckIn{from{transform:scale(.15) rotate(-25deg);opacity:0}to{transform:scale(1) rotate(0)}}
+body.shake .bigduck{animation:duckShake .1s linear infinite}
+body.shake #app{animation:appShake .12s linear infinite}
+@keyframes duckShake{
+  0%{transform:translate(3px,-2px) rotate(-5deg)}
+  50%{transform:translate(-3px,2px) rotate(5deg)}
+  100%{transform:translate(0)}
+}
+@keyframes appShake{
+  0%{transform:translate(2px,1px)}50%{transform:translate(-2px,-1px)}100%{transform:translate(0)}
+}
+.fxtext{
+  margin-top:16px;font-size:36px;font-weight:900;letter-spacing:8px;color:#ffdf8e;
+  text-shadow:0 0 24px rgba(255,180,60,.65);
+}
+.fxsub{margin-top:12px;font-size:15px;letter-spacing:3px;color:#d8b567;opacity:.9}
+
+/* ================= 弹窗 ================= */
+.modal{
+  position:fixed;inset:0;z-index:70;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.45);
+}
+.modal-box{
+  width:min(92vw,420px);max-height:82vh;max-height:82dvh;overflow-y:auto;
+  background:var(--panel);color:var(--ink);
+  border:1px solid var(--line);border-radius:16px;
+  padding:22px;box-shadow:0 12px 40px rgba(0,0,0,.25);
+  display:flex;flex-direction:column;gap:14px;
+}
+.modal-box.wide{width:min(94vw,640px)}
+.modal-box h3{font-size:16px;letter-spacing:1px}
+.modal-box label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--sub)}
+.modal-box input{
+  font-family:inherit;font-size:14px;color:var(--ink);background:var(--bg);
+  border:1px solid var(--line);border-radius:8px;padding:8px 10px;outline:none;
+}
+.modal-box input:focus{border-color:var(--accent)}
+.hint{font-size:12px;color:var(--sub);line-height:1.6}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:4px}
+.hist-item{
+  padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+  cursor:pointer;font-size:13px;line-height:1.6;transition:border-color .2s;
+  touch-action:manipulation;
+}
+.hist-item:hover{border-color:var(--accent)}
+.hist-item .h-meta{color:var(--sub);font-size:12px}
+.hist-detail{display:flex;flex-direction:column;gap:10px}
+.hist-msg{display:flex;gap:8px;font-size:13px;line-height:1.6}
+.hist-msg .who{flex:none;font-weight:700;color:var(--sub)}
+
+/* ================= 手机适配（iPhone 等窄屏触屏设备） ================= */
+@media (max-width: 560px){
+  header{gap:8px;padding:calc(8px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) 8px calc(10px + env(safe-area-inset-left))}
+  .brand{font-size:14px}
+  .brand .brandzoo{font-size:16px}
+  /* 主题/对手信息整行换到第二行，第一行留给标题和操作按钮 */
+  #phaseWarm,#phaseBattle{order:9;flex-basis:100%;min-width:0;gap:8px}
+  #topicInput{font-size:16px;max-width:none}  /* ≥16px 防止 iOS 聚焦时自动放大整页 */
+  .actions{gap:6px}
+  .actions button{min-height:42px;padding:0 12px}
+  #chat{padding:14px calc(10px + env(safe-area-inset-right)) 10px calc(10px + env(safe-area-inset-left));gap:12px}
+  .msg.user{padding-left:6%}
+  .msg.duck{padding-right:6%}
+  .avatar{width:32px;height:32px;font-size:18px}
+  .bubble{font-size:15px;line-height:1.7;padding:9px 12px}
+  .center-banner{max-width:96%;padding:6px 12px;font-size:12.5px}
+  footer{padding:10px calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left))}
+  #input{height:56px;font-size:16px}  /* ≥16px 防止 iOS 聚焦时自动放大整页 */
+  #send{height:44px;padding:0 20px;font-size:15px}
+  .bigduck{font-size:88px}
+  .fxtext{font-size:28px;letter-spacing:5px}
+  .fxsub{font-size:13px}
+  .modal-box{padding:18px;max-height:78vh;max-height:78dvh}
+  .modal-box input{font-size:16px}
+  .modal-actions button{min-height:44px;padding:0 18px}
+}
+</style>
+</head>
+<body class="warm">
+
+<div id="app" style="display:flex;flex-direction:column;height:100%">
+
+  <!-- 顶栏 -->
+  <header>
+    <div class="brand"><span class="brandzoo">🦆</span> 费曼空间</div>
+
+    <div id="phaseWarm">
+      <label>主题：</label>
+      <input id="topicInput" placeholder="我学的是……（写给鸭子听的主题）" maxlength="40">
+    </div>
+    <div id="phaseBattle" class="hidden">
+      <span class="opp-label">你的对手：</span>
+      <span id="oppName">嘎师傅</span>
+      <span id="oppLevel" class="badge">Lv.1</span>
+      <span class="scorebox">顶住 <span id="scoreDots">○○○</span></span>
+    </div>
+
+    <div class="actions">
+      <button id="btnNew" title="开始新的一场">✚ 新一场</button>
+      <button id="btnHistory" title="历史讲解">📜</button>
+      <button id="btnSettings" title="设置">⚙️</button>
+    </div>
+  </header>
+
+  <!-- 对话区 -->
+  <main id="chat"></main>
+
+  <!-- 输入区 -->
+  <footer>
+    <textarea id="input" placeholder="开始讲吧，鸭子只会听……" spellcheck="false" enterkeyhint="send"></textarea>
+    <button id="send" class="primary">发送</button>
+  </footer>
+
+</div>
+
+<!-- 觉醒特效层 -->
+<div id="fx" class="hidden"><div class="fx-inner">
+  <div class="bigduck">🦆</div>
+  <div class="fxtext">嘎——！？</div>
+  <div class="fxsub">鸭子歪了歪头</div>
+</div></div>
+
+<!-- 设置弹窗 -->
+<div id="settingsModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>设置</h3>
+    <label>API Base URL
+      <input id="setBase" placeholder="https://api.deepseek.com" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
+    </label>
+    <label>API Key
+      <input id="setKey" type="password" placeholder="sk-……" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
+    </label>
+    <label>模型
+      <input id="setModel" placeholder="deepseek-chat" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
+    </label>
+    <p class="hint">默认使用 DeepSeek（OpenAI 兼容接口）。Key 只保存在本机浏览器 localStorage 中，不会上传到任何第三方。</p>
+    <div class="modal-actions">
+      <button id="setCancel">取消</button>
+      <button id="setSave" class="primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 历史弹窗 -->
+<div id="historyModal" class="modal hidden">
+  <div class="modal-box wide">
+    <h3>历史讲解</h3>
+    <div id="histList"></div>
+    <div class="modal-actions">
+      <button id="histClose">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* =====================================================
+   配置
+   ===================================================== */
+const DEFAULT_SETTINGS = {
+  baseUrl: 'https://api.deepseek.com',
+  // 文件里不含 Key：首次使用请在 ⚙️ 设置中填写，只存在你自己浏览器里
+  apiKey: '',
+  model: 'deepseek-chat',
+};
+
+const AWAKEN_ROUND   = 10;    // 第 10 轮必定觉醒
+const EARLY_AWAKEN_P = 0.10;  // 4~9 轮：每轮 10% 概率提前觉醒
+const REPEAT_P       = 0.30;  // 4~9 轮：30% 复读，其余 60% 嘎~
+const GAG_DELAY_MS   = [1800, 4200]; // 鸭子回「嘎~」前故意拖延的区间（限流）
+const WINS_PER_LEVEL = 3;     // 每顶住 3 次，鸭子升 1 级
+const MAX_LEVEL      = 3;
+
+// API 降级重试链：DeepSeek 偶发空回答（同一请求连续重试多半仍空），
+// 逐级改用更保守的参数绕开"采样死路"
+const API_ATTEMPTS = [
+  { temperature: 1.3, jsonMode: true },
+  { temperature: 1.0, jsonMode: true },
+  { temperature: 0.8, jsonMode: false },
+];
+// 三次全失败时鸭子说的兜底垃圾话（保持对战不冷场、不离戏）
+const FALLBACK_BARKS = [
+  '嘎！？……等下，你这说法我得想想怎么杠，先记着——反正肯定有问题！',
+  '嘎嘎！你这讲得我心里不服，可又说不上来哪儿不服……你继续讲！',
+  '嘎……哼，别以为讲得顺就是对的，我琢磨琢磨再收拾你。',
+  '嘎！？你先别得意，我脑子里有一万个反驳正排着队呢。',
+];
+
+/* =====================================================
+   基础工具
+   ===================================================== */
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const rand = (a, b) => a + Math.random() * (b - a);
+const DUCK_NAME = '嘎师傅';
+
+/* =====================================================
+   存储
+   ===================================================== */
+const LS_SETTINGS = 'feynman.settings';
+const LS_SESSIONS = 'feynman.sessions';
+
+// 部分环境会禁用 localStorage（iOS 打开本地文件 / 无痕模式）——降级到内存，保证应用不崩
+const memStore = {};
+function lsGet(k){
+  try {
+    const v = localStorage.getItem(k);
+    return v === null && (k in memStore) ? memStore[k] : v;
+  } catch(e){ return k in memStore ? memStore[k] : null; }
+}
+function lsSet(k, v){
+  memStore[k] = v;
+  try { localStorage.setItem(k, v); } catch(e){}
+}
+
+function loadSettings(){
+  try { return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(lsGet(LS_SETTINGS) || '{}')); }
+  catch(e){ return Object.assign({}, DEFAULT_SETTINGS); }
+}
+function saveSettings(st){ lsSet(LS_SETTINGS, JSON.stringify(st)); }
+
+function loadSessions(){
+  try { return JSON.parse(lsGet(LS_SESSIONS) || '[]'); }
+  catch(e){ return []; }
+}
+function saveSessions(list){ lsSet(LS_SESSIONS, JSON.stringify(list)); }
+
+/* =====================================================
+   会话状态
+   ===================================================== */
+let S = null;            // 当前会话
+let jobQueue = [];       // 待处理消息队列（保证鸭子回应串行）
+let isProcessing = false;
+let typingEl = null;
+
+function newSession(){
+  S = {
+    id: 'fy-' + Date.now(),
+    topic: '',
+    startedAt: Date.now(),
+    round: 0,          // 用户消息计数
+    awoken: false,     // 是否已进入 AI 模式
+    level: 1,          // 觉醒后的杠力等级 1~3
+    wins: 0,           // 历史累计顶住次数
+    winsInLevel: 0,    // 当前级别内顶住次数
+    firstBark: false,  // 是否已飙出第一句垃圾话（决定标题切换）
+    barkFailStreak: 0, // 连续 AI 调用失败次数（用于提示，成功后清零）
+    chat: [],          // {role:'user'|'duck', text, ts}
+    active: true,
+  };
+}
+
+function persist(){
+  const list = loadSessions();
+  const i = list.findIndex(x => x.id === S.id);
+  const snap = JSON.parse(JSON.stringify(S));
+  if (i >= 0) list[i] = snap; else list.push(snap);
+  saveSessions(list);
+}
+
+function restoreActive(){
+  const act = loadSessions().find(x => x.active);
+  if (act) { S = act; return true; }
+  return false;
+}
+
+function startNewSession(){
+  if (S) { S.active = false; persist(); }
+  jobQueue = [];
+  newSession();
+  persist();
+  renderSession();
+}
+
+/* =====================================================
+   渲染
+   ===================================================== */
+function scrollBottom(){ const c = $('#chat'); c.scrollTop = c.scrollHeight; }
+
+function buildMsgEl(role, text){
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + role;
+  if (role === 'duck'){
+    const av = document.createElement('div');
+    av.className = 'avatar';
+    av.textContent = '🦆';
+    wrap.appendChild(av);
+  }
+  const b = document.createElement('div');
+  b.className = 'bubble';
+  b.textContent = text;
+  wrap.appendChild(b);
+  return wrap;
+}
+
+function addMsgEl(role, text, scroll = true){
+  const el = buildMsgEl(role, text);
+  $('#chat').appendChild(el);
+  if (scroll) scrollBottom();
+  return el;
+}
+
+function addBanner(text, kind = ''){
+  const d = document.createElement('div');
+  d.className = 'center-banner ' + kind;
+  d.textContent = text;
+  $('#chat').appendChild(d);
+  scrollBottom();
+  return d;
+}
+
+function pushMsg(role, text){
+  S.chat.push({ role, text, ts: Date.now() });
+  addMsgEl(role, text);
+  persist();
+}
+
+function showTyping(label){
+  hideTyping();
+  const wrap = buildMsgEl('duck', '');
+  wrap.classList.add('typing');
+  const b = wrap.querySelector('.bubble');
+  b.textContent = '';
+  const lab = document.createElement('span');
+  lab.textContent = label;
+  const dots = document.createElement('span');
+  dots.className = 'dots';
+  dots.innerHTML = '<i></i><i></i><i></i>';
+  b.appendChild(lab);
+  b.appendChild(dots);
+  $('#chat').appendChild(wrap);
+  typingEl = wrap;
+  scrollBottom();
+}
+function hideTyping(){ if (typingEl) { typingEl.remove(); typingEl = null; } }
+
+function updateHeaderPhase(){
+  const warm = $('#phaseWarm'), battle = $('#phaseBattle');
+  if (S.awoken && S.firstBark){
+    warm.classList.add('hidden');
+    battle.classList.remove('hidden');
+  } else {
+    warm.classList.remove('hidden');
+    battle.classList.add('hidden');
+  }
+}
+
+function updateOppUI(){
+  $('#oppLevel').textContent = 'Lv.' + S.level;
+  const filled = Math.min(S.winsInLevel, WINS_PER_LEVEL);
+  $('#scoreDots').textContent = '●'.repeat(filled) + '○'.repeat(Math.max(0, WINS_PER_LEVEL - filled));
+}
+
+function applyVisualState(){
+  document.body.classList.toggle('battle', S.awoken);
+  document.body.classList.toggle('warm', !S.awoken);
+  updateHeaderPhase();
+  updateOppUI();
+  $('#input').placeholder = S.awoken ? '回应它的垃圾话……' : '开始讲吧，鸭子只会听……';
+  const tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) tc.content = S.awoken ? '#131418' : '#f7f2e4';
+}
+
+function renderSession(){
+  $('#chat').innerHTML = '';
+  $('#topicInput').value = S.topic || '';
+  if (!S.chat.length){
+    addBanner('一只灰绒鸭坐下了。它看起来什么都不懂。');
+  } else {
+    for (const m of S.chat) $('#chat').appendChild(buildMsgEl(m.role, m.text));
+    scrollBottom();
+  }
+  applyVisualState();
+}
+
+/* =====================================================
+   鸭子本地演化（不消耗 API）
+   ===================================================== */
+function repeatOf(text){
+  const t = text.trim().replace(/\s+/g, ' ');
+  const core = t.length > 36 ? '……' + t.slice(-36) : t;
+  return '「' + core + '」……嘎？';
+}
+
+async function gagPhase(replyText){
+  showTyping('鸭子正在歪头');
+  await sleep(rand(GAG_DELAY_MS[0], GAG_DELAY_MS[1]));
+  hideTyping();
+  pushMsg('duck', replyText);
+}
+
+async function handleJob(job){
+  if (S.awoken) return battleJob();
+
+  const { text, roundNo } = job;
+  if (roundNo <= 3) return gagPhase('嘎~');
+  if (roundNo >= AWAKEN_ROUND) return awaken();
+
+  const r = Math.random();
+  if (r < EARLY_AWAKEN_P) return awaken();
+  if (r < EARLY_AWAKEN_P + REPEAT_P) return gagPhase(repeatOf(text));
+  return gagPhase('嘎~');
+}
+
+function enqueueUserMessage(text){
+  S.round++;
+  pushMsg('user', text);
+  jobQueue.push({ text, roundNo: S.round });
+  drainQueue();
+}
+
+async function drainQueue(){
+  if (isProcessing) return;
+  isProcessing = true;
+  while (jobQueue.length){
+    const job = jobQueue.shift();
+    try { await handleJob(job); }
+    catch(e){ console.error('[费曼空间] 处理失败:', e); }
+  }
+  isProcessing = false;
+}
+
+/* =====================================================
+   觉醒
+   ===================================================== */
+async function awaken(){
+  showTyping('鸭子歪了歪头');
+  await sleep(1500);
+  hideTyping();
+
+  S.awoken = true;
+  document.body.classList.remove('warm');
+  document.body.classList.add('battle');
+  applyVisualState();
+  persist();
+
+  await playAwakenFx();
+  addBanner('鸭子觉醒了。它张了张嘴——它要开始说话了。', 'awaken');
+
+  await battleJob();
+}
+
+async function playAwakenFx(){
+  const fx = $('#fx');
+  fx.classList.remove('hidden');
+  document.body.classList.add('shake');
+  await sleep(1000);
+  fx.querySelector('.fxtext').textContent = '嘎 嘎 ！';
+  fx.querySelector('.fxsub').textContent = '鸭子觉醒了';
+  document.body.classList.remove('shake');
+  await sleep(1000);
+  fx.classList.add('hidden');
+  fx.querySelector('.fxtext').textContent = '嘎——！？';
+  fx.querySelector('.fxsub').textContent = '鸭子歪了歪头';
+}
+
+/* =====================================================
+   杠精模式（真实 API）
+   ===================================================== */
+function buildDuckPrompt(){
+  const lvDesc = {
+    1: '你是刚觉醒的初级杠精：只会低水平抬杠（"我觉得不对啊""我朋友说不是这样""可是我总感觉…"），破绽明显，被讲道理时你会嘴硬但容易露怯。',
+    2: '你是杠精老手：熟练使用偷换概念、抓字眼、以偏概全、断章取义、"那照你这么说……"式的滑坡推演来杠人。',
+    3: '你是杠精大师：连环追问不给喘息、故意设逻辑陷阱、先假装被说服（"哦……你这么一说好像也有点道理"）再立刻反手一杠掐漏洞。',
+  }[S.level] || '';
+
+  const topic = S.topic ? '「' + S.topic + '」' : '一个他刚学的东西';
+
+  return [
+    '你是一只"杠精鸭子"，名字叫「嘎师傅」。用户刚学完' + topic + '，正在从头讲给你听——他要用讲解来暴露自己理解里的漏洞。',
+    '在此之前你只会"嘎~"装傻，现在你觉醒了，开始说话。',
+    lvDesc,
+    '',
+    '【核心人设】不懂装懂的杠精。',
+    '1. 你绝不懂这个知识：绝不能说对、不能教学、不能给出任何正确知识点。你只会用错误的、片面的、似是而非的"垃圾话"去反驳他。',
+    '2. 垃圾话武器：偷换概念、张冠李戴、以偏概全、循环论证、抬杠式反问、硬扯歪理类比。',
+    '3. 就地取材：只从用户刚讲的内容里抓词抓句子——引用它、曲解它、抓着他的用词抬杠。绝不聊他讲的东西之外的话题。',
+    '4. 语气：欠揍、自信、鸭子腔（偶尔"嘎"），每次回复只说 1~3 句短句，绝不长篇大论。',
+    '5. 永远保持在角色里：绝不承认自己在测试、扮演或装傻，绝不解释自己的策略。',
+    '6. 如果你被用户精准反驳（他顶住了你的垃圾话），要演出被噎住的样子（"嘎！？……哼"），但嘴硬着换一个角度继续杠。',
+    '',
+    '【每轮输出】一个 JSON 对象，包含三件事：',
+    '"user_scored"：评判用户最新这条消息有没有顶住——他精准纠正了你上一轮话里的错误 / 被带了节奏又自己拉了回来 / 把原本含糊的地方讲清楚了 → true；他含糊其辞、被你带偏、答非所问、没接住 → false。特别注意：如果你还没说过第一句垃圾话（这是你觉醒后的第一次发言），一律 false。',
+    '"score_reason"：一句话说明评判理由（会展示给用户看）。',
+    '"reply"：你这一轮的垃圾话反驳（1~3 句，鸭子腔）。',
+    '',
+    '只输出合法 JSON，格式：{"user_scored": false, "score_reason": "…", "reply": "…"}',
+  ].join('\n');
+}
+
+function parseDuckJson(content){
+  try { return JSON.parse(content); } catch(e){}
+  const m = content && content.match(/\{[\s\S]*\}/);
+  if (m){ try { return JSON.parse(m[0]); } catch(e){} }
+  return { user_scored: false, score_reason: '', reply: (content || '嘎？').trim() };
+}
+
+// 降级重试链：DeepSeek 偶发空回答（同参数重试多半仍空），逐级换保守参数绕开
+async function callDuckAPI(st){
+  let lastErr = null;
+  for (let i = 0; i < API_ATTEMPTS.length; i++){
+    try {
+      const data = await callDuckAPIOnce(st, API_ATTEMPTS[i]);
+      if (data && typeof data.reply === 'string' && data.reply.trim()) return data;
+      lastErr = new Error('鸭子哑火了（空回答）');
+    } catch(e){
+      lastErr = e;
+      if (/HTTP (401|403)/.test(e.message)) throw e; // key 无效，重试无意义
+    }
+    if (i < API_ATTEMPTS.length - 1) await sleep(600 * (i + 1));
+  }
+  throw lastErr;
+}
+
+async function callDuckAPIOnce(st, cfg){
+  const messages = [{ role: 'system', content: buildDuckPrompt() }];
+  for (const m of S.chat){
+    if (!m.text) continue;
+    if (m.role === 'duck' && m.text.startsWith('（鸭子')) continue; // 跳过历史遗留的卡壳提示
+    messages.push({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text });
+  }
+  const url = st.baseUrl.replace(/\/+$/, '') + '/chat/completions';
+  const body = {
+    model: st.model,
+    messages,
+    temperature: cfg.temperature,
+    max_tokens: 800,
+  };
+  if (cfg.jsonMode) body.response_format = { type: 'json_object' };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + st.apiKey,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok){
+    const t = await res.text().catch(() => '');
+    throw new Error('HTTP ' + res.status + ' ' + t.slice(0, 120));
+  }
+  const j = await res.json();
+  const choice = j && j.choices && j.choices[0];
+  if (choice && choice.finish_reason === 'length') return null; // 输出截断，降级重试
+  const content = choice && choice.message ? choice.message.content : '';
+  if (!content || !content.trim()) return null; // 空回答，降级重试
+  return parseDuckJson(content);
+}
+
+async function battleJob(){
+  const st = loadSettings();
+  if (!st.apiKey){
+    pushMsg('duck', '（鸭子张了张嘴，没发出声音——去右上角 ⚙️ 设置里填入 API Key 吧）');
+    return;
+  }
+
+  showTyping('鸭子正在组织垃圾话');
+  let data;
+  try {
+    data = await callDuckAPI(st);
+    S.barkFailStreak = 0;
+  } catch(e){
+    console.error('[费曼空间] AI 调用失败（降级重试后仍失败）:', e);
+    hideTyping();
+    // 已经重试失败，不再把错误信息塞进对话（会污染上下文）——鸭子用兜底垃圾话敷衍过去
+    S.barkFailStreak = (S.barkFailStreak || 0) + 1;
+    pushMsg('duck', FALLBACK_BARKS[Math.floor(Math.random() * FALLBACK_BARKS.length)]);
+    if (!S.firstBark){
+      S.firstBark = true;
+      updateHeaderPhase();
+    }
+    if (S.barkFailStreak >= 2){
+      addBanner('⚠️ 鸭子连续没接上话——检查网络，或到 ⚙️ 设置确认 API Key 是否有效');
+    }
+    return;
+  }
+  hideTyping();
+
+  // 战绩结算：firstBark 之前（第一句垃圾话）不做评判
+  if (S.firstBark && data.user_scored === true){
+    S.wins++;
+    S.winsInLevel++;
+    updateOppUI();
+    if (S.winsInLevel >= WINS_PER_LEVEL && S.level < MAX_LEVEL) levelUp();
+  }
+  if (S.firstBark && data.score_reason){
+    addBanner('顶住判定：' + (data.user_scored ? '✅ ' : '❌ ') + data.score_reason);
+  }
+
+  await typeOut(data.reply || '嘎？');
+
+  if (!S.firstBark){
+    S.firstBark = true;
+    updateHeaderPhase();
+    persist();
+  }
+}
+
+async function typeOut(text){
+  const el = addMsgEl('duck', '');
+  const bubble = el.querySelector('.bubble');
+  for (let i = 1; i <= text.length; i++){
+    bubble.textContent = text.slice(0, i);
+    if (i % 2 === 0) scrollBottom();
+    await sleep(16);
+  }
+  S.chat.push({ role: 'duck', text, ts: Date.now() });
+  persist();
+  scrollBottom();
+}
+
+function levelUp(){
+  S.level++;
+  S.winsInLevel = 0;
+  const flavor = {
+    2: '开始偷换概念',
+    3: '杠王模式：它会给你设陷阱',
+  }[S.level] || '';
+  addBanner('⚡ 你越杠不动它，它越来劲——' + DUCK_NAME + ' 升级 Lv.' + S.level + ' ' + (flavor ? '「' + flavor + '」' : ''), 'levelup');
+  updateOppUI();
+  persist();
+}
+
+/* =====================================================
+   发送
+   ===================================================== */
+function onSend(){
+  const input = $('#input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  enqueueUserMessage(text);
+}
+
+/* =====================================================
+   设置弹窗
+   ===================================================== */
+function openSettings(){
+  const st = loadSettings();
+  $('#setBase').value = st.baseUrl;
+  $('#setKey').value = st.apiKey;
+  $('#setModel').value = st.model;
+  $('#settingsModal').classList.remove('hidden');
+}
+function closeSettings(){ $('#settingsModal').classList.add('hidden'); }
+function saveSettingsFromUI(){
+  saveSettings({
+    baseUrl: $('#setBase').value.trim() || DEFAULT_SETTINGS.baseUrl,
+    apiKey: $('#setKey').value.trim(),
+    model: $('#setModel').value.trim() || DEFAULT_SETTINGS.model,
+  });
+  closeSettings();
+}
+
+/* =====================================================
+   历史弹窗
+   ===================================================== */
+function fmtDate(ts){
+  const d = new Date(ts);
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '/' + p(d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+function openHistory(){
+  renderHistoryList();
+  $('#historyModal').classList.remove('hidden');
+}
+function closeHistory(){ $('#historyModal').classList.add('hidden'); }
+
+function renderHistoryList(){
+  const list = loadSessions().sort((a, b) => b.startedAt - a.startedAt);
+  const box = $('#histList');
+  box.innerHTML = '';
+  if (!list.length){
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = '还没有历史记录。讲完一场就会出现在这里。';
+    box.appendChild(p);
+    return;
+  }
+  for (const s of list){
+    const item = document.createElement('div');
+    item.className = 'hist-item';
+    const title = document.createElement('div');
+    title.textContent = (s.active ? '🕐 进行中 · ' : '') + '「' + (s.topic || '未填主题') + '」';
+    const meta = document.createElement('div');
+    meta.className = 'h-meta';
+    meta.textContent = fmtDate(s.startedAt)
+      + ' · ' + (s.awoken ? '鸭子已觉醒 Lv.' + s.level : '鸭子还在嘎嘎叫')
+      + ' · 顶住 ' + (s.wins || 0) + ' 次';
+    item.appendChild(title);
+    item.appendChild(meta);
+    item.addEventListener('click', () => renderHistoryDetail(s));
+    box.appendChild(item);
+  }
+}
+
+function renderHistoryDetail(s){
+  const box = $('#histList');
+  box.innerHTML = '';
+
+  const back = document.createElement('button');
+  back.textContent = '← 返回列表';
+  back.addEventListener('click', renderHistoryList);
+  box.appendChild(back);
+
+  const box2 = document.createElement('div');
+  box2.className = 'hist-detail';
+  for (const m of s.chat){
+    const row = document.createElement('div');
+    row.className = 'hist-msg';
+    const who = document.createElement('span');
+    who.className = 'who';
+    who.textContent = m.role === 'user' ? '我：' : '🦆：';
+    const txt = document.createElement('span');
+    txt.textContent = m.text;
+    row.appendChild(who);
+    row.appendChild(txt);
+    box2.appendChild(row);
+  }
+  box.appendChild(box2);
+}
+
+/* =====================================================
+   初始化
+   ===================================================== */
+// iPhone 上键盘弹出会吃掉半屏：跟随 visualViewport 缩小应用高度，
+// 保证输入框始终露在键盘上方；地址栏收起/展开也自动适配
+function bindViewportResize(){
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const sync = () => {
+    if (vv.scale > 1.01 && vv.width < window.innerWidth - 1) return; // 双指放大中，不干预
+    document.body.style.height = vv.height + 'px';
+    scrollBottom();
+  };
+  vv.addEventListener('resize', sync);
+  sync();
+}
+
+function init(){
+  if (!restoreActive()){
+    newSession();
+    persist();
+  }
+  renderSession();
+
+  $('#send').addEventListener('click', onSend);
+  $('#input').addEventListener('keydown', e => {
+    if (e.isComposing || e.keyCode === 229) return; // 中文输入法选词中，回车不算发送
+    if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); onSend(); }
+  });
+  $('#topicInput').addEventListener('input', e => {
+    S.topic = e.target.value.trim();
+    persist();
+  });
+
+  $('#btnNew').addEventListener('click', () => {
+    if (!confirm('开始新的一场？当前这场会存入历史。')) return;
+    startNewSession();
+  });
+  $('#btnSettings').addEventListener('click', openSettings);
+  $('#setCancel').addEventListener('click', closeSettings);
+  $('#setSave').addEventListener('click', saveSettingsFromUI);
+  $('#btnHistory').addEventListener('click', openHistory);
+  $('#histClose').addEventListener('click', closeHistory);
+
+  for (const id of ['settingsModal', 'historyModal']){
+    $('#' + id).addEventListener('click', e => {
+      if (e.target.id === id) $('#' + id).classList.add('hidden');
+    });
+  }
+
+  bindViewportResize();
+}
+
+init();
+</script>
+</body>
+</html>
