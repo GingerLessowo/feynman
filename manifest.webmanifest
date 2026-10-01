@@ -1,0 +1,14 @@
+{
+  "name": "费曼空间",
+  "short_name": "费曼空间",
+  "description": "讲给鸭子听，暴露假性理解",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f2e4",
+  "theme_color": "#f7f2e4",
+  "icons": [
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

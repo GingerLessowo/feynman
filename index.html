@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="费曼空间">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <title>费曼空间</title>
 <!--
   费曼空间 · 单文件应用
@@ -970,6 +973,11 @@ function init(){
 }
 
 init();
+
+// PWA：注册 Service Worker（仅 https/http 环境；file:// 本地打开自动跳过）
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>
