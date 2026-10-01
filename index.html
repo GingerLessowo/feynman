@@ -359,6 +359,7 @@ const AWAKEN_ROUND   = 10;    // 第 10 轮必定觉醒
 const EARLY_AWAKEN_P = 0.10;  // 4~9 轮：每轮 10% 概率提前觉醒
 const REPEAT_P       = 0.30;  // 4~9 轮：30% 复读，其余 60% 嘎~
 const GAG_DELAY_MS   = [1800, 4200]; // 鸭子回「嘎~」前故意拖延的区间（限流）
+const REPLY_SETTLE_MS = 800;  // 鸭子开口前的静默窗口：最后一条消息过后这么久没新消息，才合并回应
 const WINS_PER_LEVEL = 3;     // 每顶住 3 次，鸭子升 1 级
 const MAX_LEVEL      = 3;
 
@@ -420,7 +421,7 @@ function saveSessions(list){ lsSet(LS_SESSIONS, JSON.stringify(list)); }
    会话状态
    ===================================================== */
 let S = null;            // 当前会话
-let jobQueue = [];       // 待处理消息队列（保证鸭子回应串行）
+let pendingJob = null;   // 待回应消息（只保留最新一条）：连发的多条合并成一次回应
 let isProcessing = false;
 let typingEl = null;
 
@@ -457,7 +458,7 @@ function restoreActive(){
 
 function startNewSession(){
   if (S) { S.active = false; persist(); }
-  jobQueue = [];
+  pendingJob = null;
   newSession();
   persist();
   renderSession();
@@ -596,15 +597,22 @@ async function handleJob(job){
 function enqueueUserMessage(text){
   S.round++;
   pushMsg('user', text);
-  jobQueue.push({ text, roundNo: S.round });
-  drainQueue();
+  // 覆盖式合并：连发时只保留最新一条，鸭子对一整段只回应一次（旧实现逐条排队 = 逐条调 API 空耗 token）
+  pendingJob = { text, roundNo: S.round, ts: Date.now() };
+  if (!isProcessing) drainQueue();
 }
 
 async function drainQueue(){
   if (isProcessing) return;
   isProcessing = true;
-  while (jobQueue.length){
-    const job = jobQueue.shift();
+  while (pendingJob){
+    // 静默窗口：期间又有新消息会顺延等待并合并，确保一次连发只触发一次回应/一次 API 调用
+    while (pendingJob && Date.now() - pendingJob.ts < REPLY_SETTLE_MS){
+      await sleep(REPLY_SETTLE_MS - (Date.now() - pendingJob.ts));
+    }
+    if (!pendingJob) break; // 静默等待期间开了新一场，放弃这条
+    const job = pendingJob;
+    pendingJob = null;
     try { await handleJob(job); }
     catch(e){ console.error('[费曼空间] 处理失败:', e); }
   }
