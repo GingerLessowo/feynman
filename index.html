@@ -56,7 +56,8 @@ body{
   background-image:var(--bg-grad);
   color:var(--ink);
   display:flex;flex-direction:column;overflow:hidden;
-  /* 100vh 在 iPhone 上按地址栏收起算，会顶掉输入框；dvh 更准，再有 JS 跟随键盘高度兜底 */
+  /* 固定在视口上；高度与上推偏移由 JS 跟随 visualViewport——键盘弹出后输入框始终贴着键盘 */
+  position:fixed;top:0;left:0;right:0;
   height:100vh;height:100dvh;
   overscroll-behavior-y:none;
   transition:background-color .9s ease,color .9s ease;
@@ -922,17 +923,19 @@ function renderHistoryDetail(s){
 /* =====================================================
    初始化
    ===================================================== */
-// iPhone 上键盘弹出会吃掉半屏：跟随 visualViewport 缩小应用高度，
-// 保证输入框始终露在键盘上方；地址栏收起/展开也自动适配
+// iPhone 键盘弹出时会做两件事：可视区高度变小（vv.height），同时整体上推让焦点可见（vv.offsetTop>0）。
+// 两者都要跟随，应用才始终"贴"在可视窗口上——底部输入框才会正好落在键盘上沿（只跟高度会错位）。
 function bindViewportResize(){
   const vv = window.visualViewport;
   if (!vv) return;
   const sync = () => {
     if (vv.scale > 1.01 && vv.width < window.innerWidth - 1) return; // 双指放大中，不干预
     document.body.style.height = vv.height + 'px';
+    document.body.style.transform = 'translateY(' + vv.offsetTop + 'px)';
     scrollBottom();
   };
   vv.addEventListener('resize', sync);
+  vv.addEventListener('scroll', sync); // 键盘弹出/收起时 iOS 的上推走 scroll 事件
   sync();
 }
 
